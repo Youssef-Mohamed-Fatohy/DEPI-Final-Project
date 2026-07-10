@@ -1,0 +1,294 @@
+-- 1️⃣ Find duplicate rows based on Order_ID, Customer_ID, and Product_ID
+SELECT 
+    Order_ID, 
+    Customer_ID, 
+    Product_ID, 
+    COUNT(*) AS duplicate_count
+FROM SuperstoreSalesDataset
+GROUP BY 
+    Order_ID, 
+    Customer_ID, 
+    Product_ID
+HAVING COUNT(*) > 1;
+
+
+-- 2️⃣ Find rows with missing data for all coulmes
+SELECT *
+FROM SuperstoreSalesDataset
+WHERE 
+    Row_ID IS NULL
+    OR Order_ID IS NULL
+    OR Order_Date IS NULL
+    OR Ship_Date IS NULL
+    OR Ship_Mode IS NULL
+    OR Customer_ID IS NULL
+    OR Customer_Name IS NULL
+    OR Segment IS NULL
+    OR Country IS NULL
+    OR City IS NULL
+    OR State IS NULL
+    OR Postal_Code IS NULL
+    OR Region IS NULL
+    OR Product_ID IS NULL
+    OR Category IS NULL
+    OR Sub_Category IS NULL
+    OR Product_Name IS NULL
+    OR Sales IS NULL;
+
+
+-- 3️⃣ Update NULL values in Postal_Code with a default value '05401'
+UPDATE SuperstoreSalesDataset
+SET postal_code = '05401'
+WHERE postal_code IS NULL;
+
+
+-- 4️⃣ Delete duplicate rows keeping the row with the smallest Row_ID (method 1)
+DELETE t1
+FROM SuperstoreSalesDataset t1
+JOIN SuperstoreSalesDataset t2
+  ON t1.Order_ID = t2.Order_ID
+ AND t1.Product_ID = t2.Product_ID
+ AND t1.Row_ID > t2.Row_ID;
+
+
+-- 5️⃣ Delete duplicates using ROW_NUMBER (method 2 - more flexible for large datasets)
+DELETE FROM SuperstoreSalesDataset
+WHERE Row_ID IN (
+    SELECT Row_ID
+    FROM (
+        SELECT 
+            Row_ID,
+            ROW_NUMBER() OVER(
+                PARTITION BY Order_ID, Product_ID
+                ORDER BY Row_ID
+            ) AS rn
+        FROM SuperstoreSalesDataset
+    ) t
+    WHERE rn > 1
+);
+
+
+-- 6️⃣ Find rows with Sales less than or equal to 0 (possible data errors)
+SELECT *
+FROM SuperstoreSalesDataset
+WHERE Sales <= 0;
+
+
+-- Basic statistics
+SELECT 
+    MIN(Sales) AS Min_Sales,
+    MAX(Sales) AS Max_Sales,
+    AVG(Sales) AS Avg_Sales
+FROM SuperstoreSalesDataset;
+
+
+-- Aggregate sales by Category and Sub-Category
+SELECT 
+    Category,
+    Sub_Category,
+    AVG(Sales) AS Avg_Sales,
+    MIN(Sales) AS Min_Sales,
+    MAX(Sales) AS Max_Sales
+FROM SuperstoreSalesDataset
+GROUP BY Category, Sub_Category
+ORDER BY Category, Sub_Category;
+
+
+SELECT sales ,product_name
+FROM SuperstoreSalesDataset
+where sales <1;
+
+
+
+
+-- make trim to dataset 
+UPDATe SuperstoreSalesDataset
+SET ship_mode = TRIM(ship_mode),
+    Segment = TRIM(Segment),
+    City = TRIM(City),
+    state = TRIM(State),
+    product_name = TRIM(product_name);
+    
+    
+    
+ -- Get the list of unique product categories
+SELECT DISTINCT Category
+FROM SuperstoreSalesDataset;
+
+-- Get the list of unique states
+SELECT DISTINCT state
+FROM SuperstoreSalesDataset;
+
+
+-- Get the list of unique shipping modes
+SELECT DISTINCT ship_mode
+FROM SuperstoreSalesDataset;
+
+
+-- ------------------- Category-wise Sales Summary -------------------
+
+
+
+
+
+-- Transaction-level Revenue KPI
+SELECT 
+   
+    Category,
+    Sub_Category,
+    Sales AS Transaction_Revenue
+FROM SuperstoreSalesDataset
+ORDER BY Sales DESC;
+
+
+
+
+
+
+
+-- Get number of orders, average, min, max, and total sales for each category
+SELECT Category,
+       COUNT(*) AS Num_Orders,         -- Total number of orders in this category
+       AVG(Sales) AS Avg_Sales,        -- Average sales amount
+       MIN(Sales) AS Min_Sales,        -- Minimum sales amount
+       MAX(Sales) AS Max_Sales,        -- Maximum sales amount
+       SUM(Sales) AS Total_Sales       -- Total sales
+FROM SuperstoreSalesDataset
+GROUP BY Category
+ORDER BY Total_Sales DESC;
+
+
+-- ------------------- Sales by Year and Quarter -------------------
+
+-- Convert Order_Date from DD/MM/YYYY to YYYY-MM-DD
+-- Calculate Year and Quarter for each order and summarize sales by category
+SELECT
+    substr(Order_Date, 7, 4) || '-' || substr(Order_Date, 4, 2) || '-' || substr(Order_Date, 1, 2) AS Proper_Date,  -- Proper date format
+    substr(Order_Date, 7, 4) AS Year,                                 -- Extract year
+    ((CAST(substr(Order_Date, 4, 2) AS INTEGER)-1)/3 + 1) AS Quarter, -- Calculate quarter (1 to 4)
+    Category,
+    SUM(Sales) AS Total_Sales,                                        -- Total sales for this category in the quarter
+    AVG(Sales) AS Avg_Sales                                           -- Average sales for this category in the quarter
+FROM SuperstoreSalesDataset
+WHERE Order_Date IS NOT NULL
+GROUP BY Year, Quarter, Category
+ORDER BY year, sales DESC;
+
+
+-- ------------------- Category & Sub-Category Sales Summary -------------------
+
+-- Aggregate sales and order count by Category and Sub-Category
+SELECT Category, sub_category, 
+       ROUND(SUM(Sales), 2) AS Total_Sales,       -- Total sales rounded to 2 decimals
+       ROUND(AVG(Sales), 2) AS Avg_Sale_Value,    -- Average sales rounded to 2 decimals
+       COUNT(*) AS Total_Orders                    -- Total number of orders
+FROM SuperstoreSalesDataset
+GROUP BY Category, sub_category
+ORDER BY Total_Sales DESC;
+
+
+-- ------------------- Ship Mode Analysis -------------------
+
+-- Count orders and calculate total and average sales by shipping mode
+SELECT ship_mode, 
+       COUNT(*) AS Order_Count,                    -- Number of orders per shipping mode
+       ROUND(SUM(Sales), 2) AS Total_Sales,       -- Total sales per shipping mode
+       ROUND(AVG(Sales), 2) AS Avg_Order_Value    -- Average sales per order
+FROM SuperstoreSalesDataset
+GROUP BY ship_mode
+ORDER BY Avg_Order_Value DESC;
+
+
+-- ------------------- Segment-wise Analysis -------------------
+
+-- Count orders, total sales, and average sales for each customer segment
+SELECT Segment,
+       COUNT(*) AS OrderCount,                     -- Total number of orders per segment
+       SUM(Sales) AS TotalSales,                   -- Total sales per segment
+       AVG(Sales) AS AvgSales                      -- Average sales per segment
+FROM SuperstoreSalesDataset
+GROUP BY Segment;
+
+
+
+-- Count orders, total sales, and average sales for each customer state
+SELECT state,
+       COUNT(*) AS OrderCount,                     -- Total number of orders per segment
+       SUM(Sales) AS TotalSales,                   -- Total sales per segment
+       AVG(Sales) AS AvgSales                      -- Average sales per segment
+FROM SuperstoreSalesDataset
+GROUP BY state
+ORDER BY  TotalSales DESC;
+
+
+
+
+-- ------------------- Lowest 5 Products by Sales -------------------
+SELECT Category,
+       Sub_Category,
+       Product_ID,        -- or product name column
+       SUM(Sales) AS Total_Sales
+FROM SuperstoreSalesDataset
+GROUP BY Category, Sub_Category, Product_ID
+ORDER BY Total_Sales ASC
+LIMIT 5;                 -- 5 products with lowest sales
+
+
+
+-- Get products in the top 10% of sales with sales rank in percentage
+SELECT * FROM (
+    SELECT 
+        product_name, 
+        sub_category, 
+        Sales,
+        ROUND(PERCENT_RANK() OVER (ORDER BY Sales) * 100, 2) AS sales_rank_percent
+    FROM SuperstoreSalesDataset
+) t
+WHERE sales_rank_percent > 90      -- top 10%
+ORDER BY Sales DESC;
+
+
+-- Count of orders per State and Ship Mode
+SELECT 
+    state,
+    ship_mode,
+    COUNT(*) AS Order_Count,
+    ROUND(SUM(Sales), 2) AS Total_Sales
+FROM SuperstoreSalesDataset
+GROUP BY  ship_mode
+ORDER BY ship_mode, Order_Count DESC;
+
+-- Top customers by total sales
+SELECT 
+    customer_name,
+    SUM(Sales) AS Total_Sales,
+    COUNT(*) AS Total_Orders,
+    ROUND(AVG(Sales), 2) AS Avg_Order_Value
+FROM SuperstoreSalesDataset
+GROUP BY customer_id
+ORDER BY Total_Sales DESC
+LIMIT 10;
+
+
+-- Calculate total sales per region
+SELECT 
+    Region, 
+    ROUND(SUM(Sales), 2) AS Regional_Sales
+FROM SuperstoreSalesDataset
+GROUP BY Region
+ORDER BY Region, Regional_Sales DESC;
+
+
+-- Calculate total sales per category within each region 
+-- and the percentage contribution of each category to the region's total sales
+SELECT 
+    Region, 
+    Category, 
+    ROUND(SUM(Sales), 2) AS Regional_Sales,
+    ROUND(
+        (SUM(Sales) * 100.0 / SUM(SUM(Sales)) OVER(PARTITION BY Region)), 
+        2
+    ) AS Pct_of_Regional_Total
+FROM SuperstoreSalesDataset
+GROUP BY Region, Category
+ORDER BY Region, Regional_Sales DESC;
